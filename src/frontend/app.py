@@ -155,10 +155,53 @@ if st.session_state.analysis_complete:
         }
         all_results.append(result_record)
 
-    # Show selected variables in summary
-    selected_vars_str = ', '.join(selected_variables)
-    summary_sentence = "Likely " + ", ".join([f"{lbl.lower()} {var.lower()}" for var, lbl in summary_labels])
-    st.markdown(f"### 📝 Personalized Weather Insight\n**Variables analyzed:** {selected_vars_str}.\n**{summary_sentence}.**")
+
+    # Show selected variables in summary, with icons and color for eye-catching effect
+    ICONS = {
+        'Temperature': '🌡️',
+        'Precipitation': '🌧️',
+        'Wind Speed': '💨',
+        'Humidity': '💧',
+        'Air Quality Index': '🌫️',
+        'Sea Level': '🌊',
+        'CO2 Levels': '🟢',
+    }
+    selected_vars_str = ', '.join([f"{ICONS.get(var, '')} {var}" for var in selected_variables])
+
+    # Build a natural language summary
+    friendly_phrases = []
+    for var, lbl in summary_labels:
+        if var == 'Temperature' and lbl in ['Very Hot', 'Hot']:
+            friendly_phrases.append('it will feel <span style="color:#e25822;font-weight:bold">very hot</span>')
+        elif var == 'Temperature' and lbl in ['Freezing', 'Cold']:
+            friendly_phrases.append('it will feel <span style="color:#1e90ff;font-weight:bold">cold</span>')
+        elif var == 'Precipitation' and lbl in ['Stormy', 'Heavy']:
+            friendly_phrases.append('expect <span style="color:#0077b6;font-weight:bold">heavy rain</span>')
+        elif var == 'Precipitation' and lbl == 'Dry':
+            friendly_phrases.append('it will be <span style="color:#f4a261;font-weight:bold">dry</span>')
+        elif var == 'Wind Speed' and lbl in ['Very Windy', 'Storm-level']:
+            friendly_phrases.append('it will be <span style="color:#b5179e;font-weight:bold">very windy</span>')
+        elif var == 'Humidity' and lbl == 'Very Humid':
+            friendly_phrases.append('the air will feel <span style="color:#43aa8b;font-weight:bold">very humid</span>')
+        elif var == 'Air Quality Index' and lbl in ['Hazardous', 'Very Poor']:
+            friendly_phrases.append('<span style="color:#d7263d;font-weight:bold">air quality is hazardous</span>')
+        elif var == 'Air Quality Index' and lbl == 'Good':
+            friendly_phrases.append('<span style="color:#43aa8b;font-weight:bold">air quality is good</span>')
+        elif var == 'CO2 Levels' and lbl in ['High', 'Very High']:
+            friendly_phrases.append('<span style="color:#b5179e;font-weight:bold">CO₂ is elevated</span>')
+        elif var == 'Sea Level' and lbl in ['Flood Risk', 'High Tide']:
+            friendly_phrases.append('<span style="color:#0077b6;font-weight:bold">flood risk is high</span>')
+        else:
+            friendly_phrases.append(f"{lbl.lower()} {var.lower()}")
+
+    summary_sentence = " and ".join(friendly_phrases)
+    st.markdown(f"""
+        <div style="background:linear-gradient(90deg,#e0eafc,#cfdef3);padding:1.2em 1em 1em 1em;border-radius:1em;margin-bottom:1em;">
+            <span style="font-size:1.3em;font-weight:bold;">📝 Personalized Weather Insight</span><br>
+            <span style="font-size:1.1em;">{summary_sentence.capitalize()}.</span><br>
+            <span style="font-size:1em;color:#555;">Variables analyzed: {selected_vars_str}</span>
+        </div>
+    """, unsafe_allow_html=True)
 
     # Advanced Results toggleable
     if 'show_advanced' not in st.session_state:
