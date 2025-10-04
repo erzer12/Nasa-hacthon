@@ -11,12 +11,42 @@ def location_input():
         Dictionary with 'lat' and 'lon' keys
     """
     st.sidebar.subheader("Location")
-    st.sidebar.markdown("Enter latitude and longitude, and see the location on the map.")
+    st.sidebar.markdown("Enter latitude and longitude, or search by place name, and see the location on the map.")
+
+    # Place name search
+    place_name = st.sidebar.text_input("Search for a place (city, address, etc.)", "")
+    search = st.sidebar.button("Search")
+
+    # Session state for lat/lon
+    if 'lat' not in st.session_state:
+        st.session_state.lat = 40.7128
+    if 'lon' not in st.session_state:
+        st.session_state.lon = -74.0060
+
+    # If search is clicked, use Google Geocoding API
+    if search and place_name:
+        import requests
+        api_key = st.secrets["GOOGLE_GEOCODE_API_KEY"]
+        if api_key:
+            url = f"https://maps.googleapis.com/maps/api/geocode/json?address={place_name}&key={api_key}"
+            resp = requests.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data['status'] == 'OK':
+                    loc = data['results'][0]['geometry']['location']
+                    st.session_state.lat = loc['lat']
+                    st.session_state.lon = loc['lng']
+                else:
+                    st.sidebar.error(f"No results found for '{place_name}'.")
+            else:
+                st.sidebar.error("Failed to contact Google Geocoding API.")
+
+    # Manual lat/lon entry
     lat = st.sidebar.number_input(
         "Latitude",
         min_value=-90.0,
         max_value=90.0,
-        value=40.7128,
+        value=float(st.session_state.lat),
         step=0.0001,
         format="%.4f",
         help="Enter latitude (-90 to 90)"
@@ -25,11 +55,14 @@ def location_input():
         "Longitude",
         min_value=-180.0,
         max_value=180.0,
-        value=-74.0060,
+        value=float(st.session_state.lon),
         step=0.0001,
         format="%.4f",
         help="Enter longitude (-180 to 180)"
     )
+    st.session_state.lat = lat
+    st.session_state.lon = lon
+
     # Show the selected location on a map with a marker using pydeck
     import pydeck as pdk
     st.write("### 🌍 Selected Location")
@@ -37,7 +70,7 @@ def location_input():
         "ScatterplotLayer",
         data=[{"lat": lat, "lon": lon}],
         get_position='[lon, lat]',
-        get_color='[200, 30, 0, 160]',
+        get_fill_color='[200, 30, 0, 160]',
         get_radius=10000,
     )
     view_state = pdk.ViewState(latitude=lat, longitude=lon, zoom=3, pitch=0)
