@@ -1,80 +1,127 @@
+# main.py
 
-# --- Real API Integration ---
-import requests
-import numpy as np
-from datetime import datetime, timedelta
 import os
+import asyncio
+import httpx
+import numpy as np
+from datetime import datetime
 from dotenv import load_dotenv
+from sklearn.linear_model import LinearRegression
 
 load_dotenv()
 
-# Meteomatics variable mapping (UI name -> API variable, unit)
+# --- NASA POWER API variable mapping (UI name -> API variable, unit) ---
 VARIABLE_MAP = {
-    'Temperature': ('t_2m:C', '°C'),
-    'Precipitation': ('precip_24h:mm', 'mm'),
-    'Wind Speed': ('wind_speed_10m:ms', 'm/s'),
-    'Humidity': ('relative_humidity_2m:p', '%'),
-    'Air Quality Index': ('air_quality_index:idx', 'AQI'),
-    'Sea Level': ('msl_pressure:hpa', 'hPa'),
-    'CO2 Levels': ('co2:ppm', 'ppm'),
-    # Also support the more specific names if needed
-    'Temperature (Max)': ('t_max_2m:C', '°C'),
-    'Temperature (Min)': ('t_min_2m:C', '°C'),
-    'Precipitation (Daily)': ('precip_24h:mm', 'mm'),
-    'Wind Speed (Max)': ('wind_speed_max_10m:ms', 'm/s'),
+    'Temperature': ('T2M', '°C'),
+    'Precipitation': ('PRECTOTCORR', 'mm'),
+    'Wind Speed': ('WS2M', 'm/s'),
+    'Humidity': ('RH2M', '%'),
+    'Temperature (Max)': ('T2M_MAX', '°C'),
+    'Temperature (Min)': ('T2M_MIN', '°C'),
+    'Precipitation (Daily)': ('PRECTOTCORR', 'mm'),
+    'Wind Speed (Max)': ('WS2M_MAX', 'm/s'),
 }
 
-def get_processed_data(selected_date, variable_name, location):
-    """
-    Fetches historical data for the given variable and location from Meteomatics API.
-    Returns 30 historical data points for the same day/month over 30 years.
-    Args:
-        selected_date: The date selected by the user (YYYY-MM-DD)
-        variable_name: The environmental variable (user-friendly name)
-        location: Dictionary with 'lat' and 'lon' keys
-    Returns:
-        Dictionary containing:
-            - dates: List of 30 dates (one per year)
-            - values: List of 30 data points
-            - variable: The variable name
-            - location: The location dictionary
-            - unit: The unit string
-    """
 
-    api_username = os.environ.get('METEOMATICS_USERNAME')
-    api_key = os.environ.get('METEOMATICS_PASSWORD')
-    if not api_username or not api_key:
-        raise RuntimeError("Meteomatics credentials not set in environment variables or .env file.")
+async def get_processed_data_async(selected_date, variable_name, location, nasa_api_key=None):
+    """
+    Fetch historical data for a given variable and location from NASA POWER API.
+    Returns 30 historical data points (same day/month over last 30 years).
+    Handles future prediction using linear regression if needed.
+    """
+    if nasa_api_key is None:
+        nasa_api_key = os.environ.get('NASA_API_KEY')
+    if not nasa_api_key:
+        raise RuntimeError("NASA API key not set in environment variables or .env file.")
 
-    # Map variable name
     var_id, unit = VARIABLE_MAP.get(variable_name, (None, 'units'))
     if var_id is None:
-        raise ValueError(f"Variable '{variable_name}' not mapped to Meteomatics API.")
+        # Return a placeholder for unmapped variables
+        return {
+            'dates': [],
+            'values': [],
+            'variable': variable_name,
+            'location': location,
+            'unit': unit,
+            'message': f"Variable '{variable_name}' is not available from NASA POWER API."
+        }
 
     # Parse date and location
     end_date = datetime.strptime(selected_date, '%Y-%m-%d')
-    lat = location['lat']
-    lon = location['lon']
+    lat, lon = location['lat'], location['lon']
 
-    # Build list of dates: same day/month for each of the last 30 years
-    dates = [(end_date.replace(year=end_date.year - i)).strftime('%Y-%m-%d') for i in range(29, -1, -1)]
+    # Prepare dates for the last 30 years
+    today = datetime.today()
+    is_future = end_date > today
+    years = [end_date.year - i for i in range(29, -1, -1)]
+    dates = [end_date.replace(year=year).strftime('%Y-%m-%d') for year in years]
+
+    start_yyyymmdd = dates[0].replace('-', '')
+    end_yyyymmdd = dates[-1].replace('-', '')
+
+    url = (
+        f"https://power.larc.nasa.gov/api/temporal/daily/point?parameters={var_id}"
+        f"&start={start_yyyymmdd}&end={end_yyyymmdd}"
+        f"&latitude={lat}&longitude={lon}"
+        f"&community=RE&format=JSON&user=demo&api_key={nasa_api_key}"
+    )
+
     values = []
-    for date_str in dates:
-        url = f"https://api.meteomatics.com/{date_str}T00:00:00Z/{var_id}/{lat},{lon}/json"
+    async with httpx.AsyncClient() as client:
         try:
-            resp = requests.get(url, auth=(api_username, api_key), timeout=10)
+            resp = await client.get(url, timeout=15)
             resp.raise_for_status()
             data = resp.json()
-            # Extract value from response
-            val = data['data'][0]['coordinates'][0]['dates'][0]['value']
-            values.append(val)
-        except Exception as e:
-            values.append(np.nan)  # Use NaN for missing data
+            param_data = data['properties']['parameter'].get(var_id, {})
 
-    return {
+            for date_str in dates:
+                val = param_data.get(date_str, np.nan)
+                # Replace NASA fill value -999.0 with np.nan
+                if val == -999.0:
+                    val = np.nan
+                values.append(val)
+        except Exception as e:
+            print(f"[NASA API ERROR] URL: {url}")
+            print(f"[NASA API ERROR] Exception: {e}")
+            values = [np.nan] * len(dates)
+
+    # Future prediction using linear regression
+    predicted_value = None
+    if is_future:
+        last_10_years = [(int(dates[-10 + i][:4]), v) for i, v in enumerate(values[-10:]) if not np.isnan(v)]
+        if len(last_10_years) >= 2:
+            years_arr = np.array([y for y, v in last_10_years]).reshape(-1, 1)
+            vals_arr = np.array([v for y, v in last_10_years])
+            model = LinearRegression().fit(years_arr, vals_arr)
+            future_year = int(selected_date[:4])
+            predicted_value = float(model.predict(np.array([[future_year]]))[0])
+        elif last_10_years:
+            predicted_value = float(np.mean([v for y, v in last_10_years]))
+
+        # Optionally replace last value with prediction
+        values[-1] = predicted_value if predicted_value is not None else np.nan
+
+    # Convert NaNs to None for JSON serialization
+    values = [None if np.isnan(v) else float(v) for v in values]
+
+    result = {
         'dates': dates,
-        'values': np.array(values, dtype=float).tolist(),
+        'values': values,
         'variable': variable_name,
         'location': location,
         'unit': unit
     }
+    if is_future:
+        result['predicted_value'] = predicted_value
+
+    return result
+
+
+async def get_multiple_variables(selected_date, variable_names, location):
+    """
+    Fetch multiple environmental variables asynchronously.
+    Returns a list of results dictionaries.
+    """
+    nasa_api_key = os.environ.get('NASA_API_KEY')
+    tasks = [get_processed_data_async(selected_date, var, location, nasa_api_key) for var in variable_names]
+    return await asyncio.gather(*tasks)

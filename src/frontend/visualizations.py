@@ -22,7 +22,7 @@ def plot_probability_trend(historical_data, threshold, analysis_result):
     ax.plot(dates, values, marker='o', linestyle='-', linewidth=2, markersize=4, label='Historical Data')
     ax.axhline(y=threshold, color='r', linestyle='--', linewidth=2, label=f'Threshold ({threshold} {unit})')
 
-    exceeding_indices = [i for i, v in enumerate(values) if v > threshold]
+    exceeding_indices = [i for i, v in enumerate(values) if v is not None and v > threshold]
     if exceeding_indices:
         exceeding_dates = [dates[i] for i in exceeding_indices]
         exceeding_values = [values[i] for i in exceeding_indices]
@@ -52,21 +52,41 @@ def plot_histogram(historical_data, threshold):
         historical_data: Dictionary with 'values', 'variable', 'unit'
         threshold: Threshold value
     """
-    fig, ax = plt.subplots(figsize=(8, 5))
-
+    import datetime
     values = historical_data['values']
     variable = historical_data['variable']
     unit = historical_data['unit']
+    dates = historical_data.get('dates', [])
 
-    ax.hist(values, bins=10, color='skyblue', edgecolor='black', alpha=0.7)
+    # Determine if this is a future date (prediction)
+    is_future = False
+    if dates:
+        try:
+            last_date = datetime.datetime.strptime(dates[-1], "%Y-%m-%d")
+            is_future = last_date > datetime.datetime.now()
+        except Exception:
+            pass
+
+    # For future dates, use only the last 10 years of data
+    if is_future:
+        values_to_plot = [v for v in values[-10:] if v is not None and not np.isnan(v)]
+        hist_label = "(last 10 years used for prediction)"
+    else:
+        values_to_plot = [v for v in values if v is not None and not np.isnan(v)]
+        hist_label = ""
+
+    if not values_to_plot:
+        st.warning(f"No data available to plot histogram for {variable}.")
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.hist(values_to_plot, bins=10, color='skyblue', edgecolor='black', alpha=0.7)
     ax.axvline(x=threshold, color='r', linestyle='--', linewidth=2, label=f'Threshold ({threshold} {unit})')
-
     ax.set_xlabel(f'{variable} ({unit})', fontsize=12, fontweight='bold')
     ax.set_ylabel('Frequency', fontsize=12, fontweight='bold')
-    ax.set_title(f'{variable} Distribution', fontsize=14, fontweight='bold')
+    ax.set_title(f'{variable} Distribution {hist_label}', fontsize=14, fontweight='bold')
     ax.legend(loc='best')
     ax.grid(True, alpha=0.3, axis='y')
-
     plt.tight_layout()
     st.pyplot(fig)
     plt.close()
@@ -78,5 +98,19 @@ def plot_map(location):
     Args:
         location: Dictionary with 'lat' and 'lon' keys
     """
-    df = pd.DataFrame([location])
-    st.map(df, zoom=5)
+    api_key = st.secrets["google"]["maps_api_key"]
+    lat = location.get('lat', 0)
+    lon = location.get('lon', 0)
+    # Use Google Maps embed with marker at the selected location
+    map_url = (
+        f"https://www.google.com/maps/embed/v1/place?key={api_key}"
+        f"&q={lat},{lon}"
+        f"&zoom=12"
+        f"&maptype=roadmap"
+    )
+    st.write("### 🌍 Selected Location")
+    st.components.v1.html(
+        f'<iframe width="700" height="400" style="border:0" src="{map_url}" allowfullscreen></iframe>',
+        height=400,
+        width=700,
+    )

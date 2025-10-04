@@ -85,7 +85,8 @@ src_path = Path(__file__).parent.parent
 sys.path.insert(0, str(src_path))
 
 from frontend import ui_helpers, visualizations
-from data_engine.main import get_processed_data
+import asyncio
+from data_engine.main import get_processed_data_async, get_multiple_variables
 from modeling.main import analyze_variable
 
 st.set_page_config(
@@ -132,17 +133,22 @@ if st.session_state.analysis_complete:
     if 'weather_cache' not in st.session_state:
         st.session_state.weather_cache = {}
     weather_cache = st.session_state.weather_cache
-    for variable in selected_variables:
+    # Fetch all variables asynchronously
+    async def fetch_all():
+        return await get_multiple_variables(selected_date, selected_variables, location)
+
+    with st.spinner('Processing all selected variables...'):
+        results = asyncio.run(fetch_all())
+
+    for idx, variable in enumerate(selected_variables):
+        historical_data = results[idx]
+        values = historical_data['values']
+        # Filter out None values for mean calculation
+        valid_vals = [v for v in values if v is not None]
+        mean_val = sum(valid_vals) / len(valid_vals) if valid_vals else 0
+        label = get_condition_label(variable, mean_val)
         cache_key = f"{selected_date}_{location['lat']}_{location['lon']}_{variable}"
-        if cache_key in weather_cache:
-            historical_data, mean_val, label = weather_cache[cache_key]
-        else:
-            with st.spinner(f'Processing {variable} data...'):
-                historical_data = get_processed_data(selected_date, variable, location)
-            mean_val = historical_data['values']
-            mean_val = sum(mean_val) / len(mean_val) if mean_val else 0
-            label = get_condition_label(variable, mean_val)
-            weather_cache[cache_key] = (historical_data, mean_val, label)
+        weather_cache[cache_key] = (historical_data, mean_val, label)
         summary_labels.append((variable, label))
         result_record = {
             'Variable': variable,
