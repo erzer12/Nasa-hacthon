@@ -92,9 +92,6 @@ def variable_selector():
         "Precipitation",
         "Wind Speed",
         "Humidity",
-        "Air Quality Index",
-        "Sea Level",
-        "CO2 Levels",
     ]
     selected = st.sidebar.multiselect(
         "Select Variables to Analyze", options=variables, default=["Temperature", "Precipitation"]

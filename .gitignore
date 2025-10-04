@@ -56,3 +56,4 @@ ENV/
 env/
 .github
 .streamlit/secrets.toml
+cache

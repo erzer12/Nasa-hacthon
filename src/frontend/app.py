@@ -26,26 +26,7 @@ def get_condition_label(variable, value):
             return "Heavy"
         else:
             return "Stormy"
-    elif variable == 'Sea Level':
-        if value < 0.2:
-            return "Normal"
-        elif value < 0.5:
-            return "Rising"
-        elif value < 1.0:
-            return "High Tide"
-        else:
-            return "Flood Risk"
-    elif variable == 'Air Quality Index':
-        if value <= 50:
-            return "Good"
-        elif value <= 100:
-            return "Moderate"
-        elif value <= 150:
-            return "Poor"
-        elif value <= 200:
-            return "Very Poor"
-        else:
-            return "Hazardous"
+    # Removed unsupported variables: Sea Level, Air Quality Index, CO2 Levels
     elif variable == 'Humidity':
         if value < 30:
             return "Dry"
@@ -66,15 +47,6 @@ def get_condition_label(variable, value):
             return "Very Windy"
         else:
             return "Storm-level"
-    elif variable == 'CO2 Levels':
-        if value < 400:
-            return "Normal"
-        elif value < 420:
-            return "Elevated"
-        elif value < 450:
-            return "High"
-        else:
-            return "Very High"
     return "Unknown"
 import streamlit as st
 import pandas as pd
@@ -84,6 +56,8 @@ from pathlib import Path
 src_path = Path(__file__).parent.parent
 sys.path.insert(0, str(src_path))
 
+
+# Use relative imports for local modules
 from frontend import ui_helpers, visualizations
 import asyncio
 from data_engine.main import get_processed_data_async, get_multiple_variables
@@ -168,9 +142,6 @@ if st.session_state.analysis_complete:
         'Precipitation': '🌧️',
         'Wind Speed': '💨',
         'Humidity': '💧',
-        'Air Quality Index': '🌫️',
-        'Sea Level': '🌊',
-        'CO2 Levels': '🟢',
     }
     selected_vars_str = ', '.join([f"{ICONS.get(var, '')} {var}" for var in selected_variables])
 
@@ -189,14 +160,6 @@ if st.session_state.analysis_complete:
             friendly_phrases.append('it will be <span style="color:#b5179e;font-weight:bold">very windy</span>')
         elif var == 'Humidity' and lbl == 'Very Humid':
             friendly_phrases.append('the air will feel <span style="color:#43aa8b;font-weight:bold">very humid</span>')
-        elif var == 'Air Quality Index' and lbl in ['Hazardous', 'Very Poor']:
-            friendly_phrases.append('<span style="color:#d7263d;font-weight:bold">air quality is hazardous</span>')
-        elif var == 'Air Quality Index' and lbl == 'Good':
-            friendly_phrases.append('<span style="color:#43aa8b;font-weight:bold">air quality is good</span>')
-        elif var == 'CO2 Levels' and lbl in ['High', 'Very High']:
-            friendly_phrases.append('<span style="color:#b5179e;font-weight:bold">CO₂ is elevated</span>')
-        elif var == 'Sea Level' and lbl in ['Flood Risk', 'High Tide']:
-            friendly_phrases.append('<span style="color:#0077b6;font-weight:bold">flood risk is high</span>')
         else:
             friendly_phrases.append(f"{lbl.lower()} {var.lower()}")
 
@@ -226,9 +189,6 @@ if st.session_state.analysis_complete:
                 'Precipitation': 60.0,
                 'Wind Speed': 20.0,
                 'Humidity': 70.0,
-                'Air Quality Index': 100.0,
-                'Sea Level': 0.5,
-                'CO2 Levels': 415.0
             }
             threshold = ui_helpers.threshold_input(variable, default_thresholds.get(variable, 50.0))
             with st.spinner(f'Analyzing {variable}...'):

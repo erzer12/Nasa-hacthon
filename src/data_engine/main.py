@@ -1,4 +1,4 @@
-# main.py
+
 
 import os
 import asyncio
@@ -10,118 +10,138 @@ from sklearn.linear_model import LinearRegression
 
 load_dotenv()
 
-# --- NASA POWER API variable mapping (UI name -> API variable, unit) ---
+"""
+NASA Hackathon Data Engine
+Hybrid backend for async weather/climate data fetching from NASA POWER, GES DISC OPeNDAP, and Meteomatics (fallback).
+Caches all results in /data/cache/.
+"""
+import os
+import asyncio
+import httpx
+import numpy as np
+import pandas as pd
+from datetime import datetime
+from pathlib import Path
+import json
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# --- Variable mapping (UI name -> (NASA var, unit, Meteomatics var, GES DISC var)) ---
 VARIABLE_MAP = {
-    'Temperature': ('T2M', '°C'),
-    'Precipitation': ('PRECTOTCORR', 'mm'),
-    'Wind Speed': ('WS2M', 'm/s'),
-    'Humidity': ('RH2M', '%'),
-    'Temperature (Max)': ('T2M_MAX', '°C'),
-    'Temperature (Min)': ('T2M_MIN', '°C'),
-    'Precipitation (Daily)': ('PRECTOTCORR', 'mm'),
-    'Wind Speed (Max)': ('WS2M_MAX', 'm/s'),
+    'Temperature':      ('T2M', '°C', 't_2m:C', None),
+    'Precipitation':    ('PRECTOTCORR', 'mm', 'precip_24h:mm', None),
+    'Wind Speed':       ('WS2M', 'm/s', 'wind_speed_10m:ms', None),
+    'Humidity':         ('RH2M', '%', 'relative_humidity_2m:p', None),
 }
 
+# --- Caching helpers ---
+CACHE_DIR = Path(__file__).parent.parent.parent / "data" / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-async def get_processed_data_async(selected_date, variable_name, location, nasa_api_key=None):
-    """
-    Fetch historical data for a given variable and location from NASA POWER API.
-    Returns 30 historical data points (same day/month over last 30 years).
-    Handles future prediction using linear regression if needed.
-    """
-    if nasa_api_key is None:
-        nasa_api_key = os.environ.get('NASA_API_KEY')
-    if not nasa_api_key:
-        raise RuntimeError("NASA API key not set in environment variables or .env file.")
+def cache_path(lat, lon, variable, date, source):
+    safe_var = variable.replace(" ", "_")
+    return CACHE_DIR / f"{safe_var}_{lat:.4f}_{lon:.4f}_{date}_{source}.parquet"
 
-    var_id, unit = VARIABLE_MAP.get(variable_name, (None, 'units'))
-    if var_id is None:
-        # Return a placeholder for unmapped variables
+def cache_save(lat, lon, variable, date, data, source):
+    path = cache_path(lat, lon, variable, date, source)
+    df = pd.DataFrame({"dates": data["dates"], "values": data["values"]})
+    df.to_parquet(path, index=False)
+
+def cache_load(lat, lon, variable, date, source):
+    path = cache_path(lat, lon, variable, date, source)
+    if path.exists():
+        df = pd.read_parquet(path)
         return {
-            'dates': [],
-            'values': [],
-            'variable': variable_name,
-            'location': location,
-            'unit': unit,
-            'message': f"Variable '{variable_name}' is not available from NASA POWER API."
+            "dates": df["dates"].tolist(),
+            "values": df["values"].tolist(),
         }
+    return None
 
-    # Parse date and location
-    end_date = datetime.strptime(selected_date, '%Y-%m-%d')
-    lat, lon = location['lat'], location['lon']
 
-    # Prepare dates for the last 30 years
-    today = datetime.today()
-    is_future = end_date > today
+
+
+
+# --- Meteomatics API ---
+async def fetch_meteomatics_data(lat, lon, date, variable):
+    """Fetch daily data from Meteomatics API for the last 30 years for a variable."""
+    _, unit, meteomatics_var, _ = VARIABLE_MAP.get(variable, (None, None, None, None))
+    if not meteomatics_var:
+        return None
+    user = os.environ.get("METEOMATICS_USERNAME")
+    pw = os.environ.get("METEOMATICS_PASSWORD")
+    end_date = datetime.strptime(date, '%Y-%m-%d')
     years = [end_date.year - i for i in range(29, -1, -1)]
     dates = [end_date.replace(year=year).strftime('%Y-%m-%d') for year in years]
-
-    start_yyyymmdd = dates[0].replace('-', '')
-    end_yyyymmdd = dates[-1].replace('-', '')
-
+    start = dates[0] + "T00:00:00Z"
+    end = dates[-1] + "T00:00:00Z"
     url = (
-        f"https://power.larc.nasa.gov/api/temporal/daily/point?parameters={var_id}"
-        f"&start={start_yyyymmdd}&end={end_yyyymmdd}"
-        f"&latitude={lat}&longitude={lon}"
-        f"&community=RE&format=JSON&user=demo&api_key={nasa_api_key}"
+        f"https://api.meteomatics.com/{start}--{end}:P1Y/{meteomatics_var}/{lat},{lon}/json"
     )
-
-    values = []
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.get(url, timeout=15)
+            resp = await client.get(url, auth=(user, pw), timeout=15)
             resp.raise_for_status()
             data = resp.json()
-            param_data = data['properties']['parameter'].get(var_id, {})
-
-            for date_str in dates:
-                val = param_data.get(date_str, np.nan)
-                # Replace NASA fill value -999.0 with np.nan
-                if val == -999.0:
-                    val = np.nan
-                values.append(val)
+            timeseries = data['data'][0]['coordinates'][0]['dates']
+            values = [d['value'] for d in timeseries]
+            dates = [d['date'][:10] for d in timeseries]
+            return {
+                "dates": dates,
+                "values": [None if v is None or (isinstance(v, float) and np.isnan(v)) else float(v) for v in values],
+                "variable": variable,
+                "unit": unit,
+                "source": "Meteomatics"
+            }
         except Exception as e:
-            print(f"[NASA API ERROR] URL: {url}")
-            print(f"[NASA API ERROR] Exception: {e}")
-            values = [np.nan] * len(dates)
+            print(f"Meteomatics API error for {variable}: {e}")
+            return None
 
-    # Future prediction using linear regression
-    predicted_value = None
-    if is_future:
-        last_10_years = [(int(dates[-10 + i][:4]), v) for i, v in enumerate(values[-10:]) if not np.isnan(v)]
-        if len(last_10_years) >= 2:
-            years_arr = np.array([y for y, v in last_10_years]).reshape(-1, 1)
-            vals_arr = np.array([v for y, v in last_10_years])
-            model = LinearRegression().fit(years_arr, vals_arr)
-            future_year = int(selected_date[:4])
-            predicted_value = float(model.predict(np.array([[future_year]]))[0])
-        elif last_10_years:
-            predicted_value = float(np.mean([v for y, v in last_10_years]))
 
-        # Optionally replace last value with prediction
-        values[-1] = predicted_value if predicted_value is not None else np.nan
 
-    # Convert NaNs to None for JSON serialization
-    values = [None if np.isnan(v) else float(v) for v in values]
 
-    result = {
-        'dates': dates,
-        'values': values,
-        'variable': variable_name,
-        'location': location,
-        'unit': unit
+# --- Main async data fetch (Meteomatics only) ---
+async def get_processed_data_async(selected_date, variable_name, location):
+    """Fetch data for a variable at a location and date using Meteomatics only."""
+    lat, lon = float(location['lat']), float(location['lon'])
+    # If variable is not mapped to Meteomatics, return empty result with message
+    if variable_name not in VARIABLE_MAP or VARIABLE_MAP[variable_name][2] is None:
+        print(f"Variable '{variable_name}' not available from Meteomatics.")
+        return {
+            "dates": [],
+            "values": [],
+            "variable": variable_name,
+            "unit": None,
+            "source": "Unavailable",
+            "message": f"Variable '{variable_name}' is not available from Meteomatics API."
+        }
+    # 1. Try cache for Meteomatics
+    meteo_cache = cache_load(lat, lon, variable_name, selected_date, "meteomatics")
+    if meteo_cache:
+        print(f"Loaded {variable_name} from Meteomatics cache.")
+        return {
+            **meteo_cache,
+            "variable": variable_name,
+            "unit": VARIABLE_MAP[variable_name][1],
+            "source": "Meteomatics (cache)"
+        }
+    # 2. Fetch Meteomatics
+    data_meteo = await fetch_meteomatics_data(lat, lon, selected_date, variable_name)
+    if data_meteo and any(v is not None for v in data_meteo["values"]):
+        cache_save(lat, lon, variable_name, selected_date, data_meteo, "meteomatics")
+        print(f"Fetched {variable_name} from Meteomatics API.")
+        return data_meteo
+    # 3. If all fail, return empty
+    print(f"No data available for {variable_name} from Meteomatics.")
+    return {
+        "dates": [],
+        "values": [],
+        "variable": variable_name,
+        "unit": VARIABLE_MAP[variable_name][1],
+        "source": "Unavailable"
     }
-    if is_future:
-        result['predicted_value'] = predicted_value
-
-    return result
-
 
 async def get_multiple_variables(selected_date, variable_names, location):
-    """
-    Fetch multiple environmental variables asynchronously.
-    Returns a list of results dictionaries.
-    """
-    nasa_api_key = os.environ.get('NASA_API_KEY')
-    tasks = [get_processed_data_async(selected_date, var, location, nasa_api_key) for var in variable_names]
+    """Fetch multiple variables in parallel."""
+    tasks = [get_processed_data_async(selected_date, var, location) for var in variable_names]
     return await asyncio.gather(*tasks)
