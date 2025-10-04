@@ -196,10 +196,10 @@ if st.session_state.analysis_complete:
 
     summary_sentence = " and ".join(friendly_phrases)
     st.markdown(f"""
-        <div style="background:linear-gradient(90deg,#e0eafc,#cfdef3);padding:1.2em 1em 1em 1em;border-radius:1em;margin-bottom:1em;">
-            <span style="font-size:1.3em;font-weight:bold;">📝 Personalized Weather Insight</span><br>
-            <span style="font-size:1.1em;">{summary_sentence.capitalize()}.</span><br>
-            <span style="font-size:1em;color:#555;">Variables analyzed: {selected_vars_str}</span>
+        <div style="background:#23272f;border:1.5px solid #343942;padding:1.2em 1em 1em 1em;border-radius:1em;margin-bottom:1em;box-shadow:0 2px 8px 0 rgba(0,0,0,0.18);">
+            <span style="font-size:1.3em;font-weight:bold;color:#f8fafc;">📝 Personalized Weather Insight</span><br>
+            <span style="font-size:1.1em;color:#f8fafc;">{summary_sentence.capitalize()}.</span><br>
+            <span style="font-size:1em;color:#b0b8c1;">Variables analyzed: {selected_vars_str}</span>
         </div>
     """, unsafe_allow_html=True)
 
