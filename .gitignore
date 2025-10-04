@@ -55,5 +55,5 @@ venv/
 ENV/
 env/
 .github
-.streamlit/secrets.toml
 cache
+secrets.toml
