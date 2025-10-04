@@ -21,3 +21,37 @@ dist-ssr
 *.sln
 *.sw?
 .env
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+*.spec
+
+# Jupyter and IPython
+.ipynb_checkpoints
+*.ipynb
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Icon?
+*.bak
+*.tmp
+
+# Test and coverage outputs
+.coverage
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.github
