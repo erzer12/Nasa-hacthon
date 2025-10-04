@@ -27,6 +27,7 @@ Select your location, date range, and variables to analyze patterns and potentia
 st.sidebar.title("Configuration")
 st.sidebar.markdown("Adjust the parameters below to customize your analysis.")
 
+
 location = ui_helpers.location_input()
 selected_date = ui_helpers.date_input()
 selected_variables = ui_helpers.variable_selector()
@@ -35,9 +36,7 @@ if not selected_variables:
     st.warning("Please select at least one environmental variable from the sidebar.")
     st.stop()
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("Location Preview")
-visualizations.plot_map(location)
+# Removed duplicate map preview
 
 st.markdown("---")
 

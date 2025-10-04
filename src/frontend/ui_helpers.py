@@ -1,15 +1,17 @@
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime
+from streamlit_folium import st_folium
+import folium
+
 
 def location_input():
     """
-    Creates input widgets for location (latitude and longitude).
-
+    Allows the user to select a location by clicking on a map or entering coordinates.
     Returns:
         Dictionary with 'lat' and 'lon' keys
     """
     st.sidebar.subheader("Location")
-
+    st.sidebar.markdown("Enter latitude and longitude, and see the location on the map.")
     lat = st.sidebar.number_input(
         "Latitude",
         min_value=-90.0,
@@ -19,7 +21,6 @@ def location_input():
         format="%.4f",
         help="Enter latitude (-90 to 90)"
     )
-
     lon = st.sidebar.number_input(
         "Longitude",
         min_value=-180.0,
@@ -29,13 +30,24 @@ def location_input():
         format="%.4f",
         help="Enter longitude (-180 to 180)"
     )
-
+    # Show the selected location on a map with a marker using pydeck
+    import pydeck as pdk
+    st.write("### 🌍 Selected Location")
+    layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=[{"lat": lat, "lon": lon}],
+        get_position='[lon, lat]',
+        get_color='[200, 30, 0, 160]',
+        get_radius=10000,
+    )
+    view_state = pdk.ViewState(latitude=lat, longitude=lon, zoom=3, pitch=0)
+    st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
     return {'lat': lat, 'lon': lon}
+
 
 def date_input():
     """
     Creates a date input widget.
-
     Returns:
         String date in 'YYYY-MM-DD' format
     """
@@ -51,10 +63,10 @@ def date_input():
 
     return selected_date.strftime('%Y-%m-%d')
 
+
 def variable_selector():
     """
     Creates a multi-select widget for environmental variables.
-
     Returns:
         List of selected variable names
     """
@@ -79,14 +91,13 @@ def variable_selector():
 
     return selected_variables
 
+
 def threshold_input(variable_name, default_value):
     """
     Creates a threshold input widget for a specific variable.
-
     Args:
         variable_name: Name of the variable
         default_value: Default threshold value
-
     Returns:
         Float threshold value
     """
