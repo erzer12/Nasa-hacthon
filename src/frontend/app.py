@@ -160,8 +160,14 @@ if st.session_state.analysis_complete:
     summary_sentence = "Likely " + ", ".join([f"{lbl.lower()} {var.lower()}" for var, lbl in summary_labels])
     st.markdown(f"### 📝 Personalized Weather Insight\n**Variables analyzed:** {selected_vars_str}.\n**{summary_sentence}.**")
 
-    # Advanced Results toggle
-    if st.button("Show Advanced Results"):
+    # Advanced Results toggleable
+    if 'show_advanced' not in st.session_state:
+        st.session_state.show_advanced = False
+    toggle_label = "Hide Advanced Results" if st.session_state.show_advanced else "Show Advanced Results"
+    if st.button(toggle_label):
+        st.session_state.show_advanced = not st.session_state.show_advanced
+
+    if st.session_state.show_advanced:
         for idx, variable in enumerate(selected_variables):
             cache_key = f"{selected_date}_{location['lat']}_{location['lon']}_{variable}"
             historical_data, mean_val, label = weather_cache[cache_key]
