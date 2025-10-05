@@ -53,12 +53,7 @@ import pandas as pd
 import sys
 from pathlib import Path
 
-src_path = Path(__file__).parent.parent
-sys.path.insert(0, str(src_path))
-
-
-# Use relative imports for local modules
-from frontend import ui_helpers, visualizations
+from . import ui_helpers, visualizations
 import asyncio
 from data_engine.main import get_processed_data_async, get_multiple_variables
 from modeling.main import analyze_variable
