@@ -1,20 +1,7 @@
 
 
-import os
-import asyncio
-import httpx
-import numpy as np
-from datetime import datetime
-from dotenv import load_dotenv
-from sklearn.linear_model import LinearRegression
 
-load_dotenv()
 
-"""
-NASA Hackathon Data Engine
-Hybrid backend for async weather/climate data fetching from NASA POWER, GES DISC OPeNDAP, and Meteomatics (fallback).
-Caches all results in /data/cache/.
-"""
 import os
 import asyncio
 import httpx
@@ -23,9 +10,13 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 import json
-from dotenv import load_dotenv
+import streamlit as st
 
-load_dotenv()
+"""
+NASA Hackathon Data Engine
+Hybrid backend for async weather/climate data fetching from NASA POWER, GES DISC OPeNDAP, and Meteomatics (fallback).
+Caches all results in /data/cache/.
+"""
 
 # --- Variable mapping (UI name -> (NASA var, unit, Meteomatics var, GES DISC var)) ---
 VARIABLE_MAP = {
@@ -68,8 +59,8 @@ async def fetch_meteomatics_data(lat, lon, date, variable):
     _, unit, meteomatics_var, _ = VARIABLE_MAP.get(variable, (None, None, None, None))
     if not meteomatics_var:
         return None
-    user = os.environ.get("METEOMATICS_USERNAME")
-    pw = os.environ.get("METEOMATICS_PASSWORD")
+    user = st.secrets["meteomatics"]["username"]
+    pw = st.secrets["meteomatics"]["password"]
     end_date = datetime.strptime(date, '%Y-%m-%d')
     years = [end_date.year - i for i in range(29, -1, -1)]
     dates = [end_date.replace(year=year).strftime('%Y-%m-%d') for year in years]

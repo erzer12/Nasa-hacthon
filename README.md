@@ -23,10 +23,21 @@ Historical Risk Explorer is a modular application that allows users to:
     source .venv/bin/activate
     ```
 
+
 3. **Install dependencies:**
     ```bash
     pip install -r requirements.txt
     ```
+
+4. **Configure credentials:**
+    
+    Create a file at `.streamlit/secrets.toml` in the project root with the following structure:
+    ```toml
+    [meteomatics]
+    username = "your_meteomatics_username"
+    password = "your_meteomatics_password"
+    ```
+    This file is used by Streamlit to securely provide credentials to the app. Do **not** use a `.env` file.
 
 ## Directory Structure
 
@@ -79,7 +90,7 @@ The app will be accessible at [http://localhost:8501](http://localhost:8501) in 
 
 ## Data Source
 
-All data is mock-generated using NumPy for demonstration. No external APIs or live data sources are required.
+Some data is mock-generated using NumPy for demonstration. For Meteomatics, you must provide credentials in `.streamlit/secrets.toml` as described above.
 
 ## Key Features
 

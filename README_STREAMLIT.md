@@ -23,6 +23,16 @@ src/
 pip install -r requirements.txt
 ```
 
+2. Configure credentials:
+   
+    Create a file at `.streamlit/secrets.toml` in the project root with the following structure:
+    ```toml
+    [meteomatics]
+    username = "your_meteomatics_username"
+    password = "your_meteomatics_password"
+    ```
+    This file is used by Streamlit to securely provide credentials to the app. Do **not** use a `.env` file.
+
 ## Running the Application
 
 To run the Streamlit application:
@@ -55,4 +65,4 @@ The application supports analysis of the following variables:
 
 ## Mock Data
 
-The application uses mock data generated with NumPy for demonstration purposes. No external API calls are required.
+The application uses mock data generated with NumPy for demonstration purposes. For Meteomatics, you must provide credentials in `.streamlit/secrets.toml` as described above.

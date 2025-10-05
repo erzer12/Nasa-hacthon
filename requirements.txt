@@ -5,4 +5,6 @@ numpy==1.26.4
 requests
 streamlit-folium
 geopy
-python-dotenv
+httpx
+scikit-learn
+pyarrow
