@@ -59,8 +59,9 @@ async def fetch_meteomatics_data(lat, lon, date, variable):
     _, unit, meteomatics_var, _ = VARIABLE_MAP.get(variable, (None, None, None, None))
     if not meteomatics_var:
         return None
-    user = st.secrets["meteomatics"]["username"]
-    pw = st.secrets["meteomatics"]["password"]
+    import os
+    user = st.secrets["meteomatics"].get("username") if "meteomatics" in st.secrets and "username" in st.secrets["meteomatics"] else os.environ.get("METEOMATICS_USERNAME")
+    pw = st.secrets["meteomatics"].get("password") if "meteomatics" in st.secrets and "password" in st.secrets["meteomatics"] else os.environ.get("METEOMATICS_PASSWORD")
     end_date = datetime.strptime(date, '%Y-%m-%d')
     years = [end_date.year - i for i in range(29, -1, -1)]
     dates = [end_date.replace(year=year).strftime('%Y-%m-%d') for year in years]

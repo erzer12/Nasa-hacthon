@@ -98,7 +98,8 @@ def plot_map(location):
     Args:
         location: Dictionary with 'lat' and 'lon' keys
     """
-    api_key = st.secrets["google"]["maps_api_key"]
+    import os
+    api_key = st.secrets["google"].get("maps_api_key") if "google" in st.secrets and "maps_api_key" in st.secrets["google"] else os.environ.get("GOOGLE_MAPS_API_KEY")
     lat = location.get('lat', 0)
     lon = location.get('lon', 0)
     # Use Google Maps embed with marker at the selected location

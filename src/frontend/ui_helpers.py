@@ -22,7 +22,8 @@ def location_input():
     # Place search
     place_name = st.sidebar.text_input("Search for a place (city, address, etc.)", "")
     if st.sidebar.button("Search") and place_name:
-        api_key = st.secrets["google"]["maps_api_key"]
+        import os
+        api_key = st.secrets["google"].get("maps_api_key") if "google" in st.secrets and "maps_api_key" in st.secrets["google"] else os.environ.get("GOOGLE_MAPS_API_KEY")
         url = f"https://maps.googleapis.com/maps/api/geocode/json?address={place_name}&key={api_key}"
         resp = requests.get(url)
         if resp.status_code == 200:
@@ -59,8 +60,9 @@ def location_input():
 
     # Google Maps embed with marker at the selected location and zoomed in
     st.write("### 🌍 Selected Location")
+    api_key = st.secrets["google"].get("maps_api_key") if "google" in st.secrets and "maps_api_key" in st.secrets["google"] else os.environ.get("GOOGLE_MAPS_API_KEY")
     map_url = (
-        f"https://www.google.com/maps/embed/v1/place?key={st.secrets['google']['maps_api_key']}"
+        f"https://www.google.com/maps/embed/v1/place?key={api_key}"
         f"&q={lat},{lon}"
         f"&zoom=12"
         f"&maptype=roadmap"
