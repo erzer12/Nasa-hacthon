@@ -56,4 +56,3 @@ ENV/
 env/
 .github
 cache
-secrets.toml
